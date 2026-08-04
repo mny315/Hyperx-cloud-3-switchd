@@ -1,0 +1,41 @@
+{
+  description = "Development environment for hyperx-audio-switchd";
+
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+  outputs = { nixpkgs, ... }:
+    let
+      supportedSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
+      pkgsFor = system: import nixpkgs { inherit system; };
+    in
+    {
+      devShells = forAllSystems (system:
+        let
+          pkgs = pkgsFor system;
+        in
+        {
+          default = pkgs.mkShell {
+            nativeBuildInputs = with pkgs; [
+              cargo
+              clippy
+              pkg-config
+              rustc
+              rustfmt
+            ];
+
+            buildInputs = with pkgs; [
+              pulseaudio
+              systemd
+            ];
+
+            RUST_BACKTRACE = "1";
+          };
+        });
+
+      formatter = forAllSystems (system: (pkgsFor system).nixfmt-rfc-style);
+    };
+}

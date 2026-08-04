@@ -1,0 +1,24 @@
+[package]
+name = "hyperx-audio-switchd"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Switch PipeWire/PulseAudio output based on HyperX Cloud III S Wireless power state"
+publish = false
+keywords = ["audio", "pipewire", "pulse", "hyperx", "hid"]
+categories = ["command-line-utilities", "hardware-support", "multimedia::audio"]
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+hidapi = { version = "2.6.6", default-features = false, features = ["linux-native"] }
+pulse = { package = "libpulse-binding", version = "2.30.1" }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = "symbols"
