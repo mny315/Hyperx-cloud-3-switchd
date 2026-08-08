@@ -1,5 +1,5 @@
 {
-  description = "Development environment for hyperx-audio-switchd";
+  description = "HyperX Cloud III S Wireless audio switch daemon";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -13,6 +13,11 @@
       pkgsFor = system: import nixpkgs { inherit system; };
     in
     {
+      nixosModules = {
+        default = import ./hyperx.nix;
+        hyperx-cloud-3-switchd = import ./hyperx.nix;
+      };
+
       devShells = forAllSystems (system:
         let
           pkgs = pkgsFor system;
