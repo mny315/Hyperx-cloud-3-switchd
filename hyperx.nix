@@ -3,31 +3,7 @@
 let
   cfg = config.services.hyperx-cloud-3-switchd;
 
-  package = pkgs.rustPlatform.buildRustPackage {
-    pname = "hyperx-audio-switchd";
-    version = "0.1.0";
-
-    src = lib.cleanSource ./.;
-
-    cargoLock.lockFile = ./Cargo.lock;
-
-    nativeBuildInputs = [
-      pkgs.pkg-config
-    ];
-
-    buildInputs = [
-      pkgs.pulseaudio
-      pkgs.systemd
-    ];
-
-    meta = {
-      description = "Switch audio output based on HyperX Cloud III S Wireless power state";
-      homepage = "https://github.com/mny315/Hyperx-cloud-3-switchd";
-      license = lib.licenses.mit;
-      mainProgram = "hyperx-audio-switchd";
-      platforms = lib.platforms.linux;
-    };
-  };
+  package = pkgs.callPackage ./package.nix { };
 
   udevRules = pkgs.writeTextDir
     "lib/udev/rules.d/70-hyperx-cloud-3-switchd.rules"
@@ -104,7 +80,10 @@ in
 
       after = [
         "graphical-session.target"
+        "pipewire-pulse.socket"
       ];
+
+      wants = lib.optional config.services.pipewire.pulse.enable "pipewire-pulse.socket";
 
       serviceConfig = {
         Type = "simple";
@@ -113,6 +92,12 @@ in
         Restart = "on-failure";
         RestartSec = 2;
         TimeoutStopSec = 5;
+
+        StateDirectory = "hyperx-cloud-3-switchd";
+        StateDirectoryMode = "0700";
+        # Avoid libpulse creating its runtime directory under a read-only /run.
+        Environment = lib.optional config.services.pipewire.pulse.enable
+          "PULSE_SERVER=unix:%t/pulse/native";
 
         NoNewPrivileges = true;
         PrivateTmp = true;

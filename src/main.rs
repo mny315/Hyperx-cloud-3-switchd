@@ -3,6 +3,7 @@ mod hid;
 
 use std::{
     num::NonZeroU64,
+    path::PathBuf,
     thread,
     time::{Duration, Instant},
 };
@@ -24,6 +25,10 @@ struct Args {
     /// Normally the current non-HyperX output is detected and remembered.
     #[arg(long)]
     speaker_sink: Option<String>,
+
+    /// Persistent speaker selection (default: XDG state directory).
+    #[arg(long)]
+    state_file: Option<PathBuf>,
 
     /// HyperX HID polling interval in milliseconds.
     #[arg(long, default_value = "250")]
@@ -57,6 +62,12 @@ fn main() -> Result<()> {
 }
 
 fn run(args: Args) -> Result<()> {
+    let state_path = args
+        .state_file
+        .clone()
+        .map(Ok)
+        .unwrap_or_else(audio::default_state_path)?;
+    eprintln!("speaker state file: {}", state_path.display());
     let poll_interval = Duration::from_millis(args.poll_ms.get());
     let audio_verify_interval = Duration::from_secs(args.audio_verify_secs.get());
     let mut headset = HeadsetProbe::default();
@@ -74,6 +85,26 @@ fn run(args: Args) -> Result<()> {
 
     loop {
         let cycle_started = Instant::now();
+
+        // Service libpulse on every cycle so new streams, hotplug and server
+        // restarts trigger reconciliation without waiting for the safety timer.
+        if let Some(router) = pulse.as_mut() {
+            let changed = if router.is_healthy() {
+                match router.poll_changes() {
+                    Ok(changed) => changed,
+                    Err(error) => {
+                        report_distinct_error("audio error", &error, &mut last_pulse_error);
+                        true
+                    }
+                }
+            } else {
+                true
+            };
+            if changed && !reconcile_pending {
+                reconcile_pending = true;
+                next_audio_attempt = cycle_started;
+            }
+        }
 
         let observed_routing_state = if cycle_started < next_hid_query {
             routing_state.unwrap_or(HeadsetState::Disconnected)
@@ -136,7 +167,7 @@ fn run(args: Args) -> Result<()> {
                     }
                 }
             } else {
-                match PulseRouter::connect() {
+                match PulseRouter::connect(state_path.clone()) {
                     Ok(router) => pulse = Some(router),
                     Err(error) => {
                         report_distinct_error("audio error", &error, &mut last_pulse_error);
@@ -173,9 +204,16 @@ fn run(args: Args) -> Result<()> {
                             }
 
                             last_target = Some(result.target_name);
-                            reconcile_pending = false;
-                            next_audio_attempt = cycle_started;
+                            reconcile_pending = result.failed_stream_moves > 0;
+                            next_audio_attempt = if reconcile_pending {
+                                Instant::now() + AUDIO_ERROR_RETRY_DELAY
+                            } else {
+                                cycle_started
+                            };
                             next_audio_verification = Instant::now() + audio_verify_interval;
+                            if args.once && reconcile_pending {
+                                bail!("some playback streams could not be moved");
+                            }
                         }
                         Err(error) => {
                             report_distinct_error("audio error", &error, &mut last_pulse_error);

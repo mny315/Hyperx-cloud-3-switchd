@@ -18,6 +18,10 @@
         hyperx-cloud-3-switchd = import ./hyperx.nix;
       };
 
+      packages = forAllSystems (system: {
+        default = (pkgsFor system).callPackage ./package.nix { };
+      });
+
       devShells = forAllSystems (system:
         let
           pkgs = pkgsFor system;

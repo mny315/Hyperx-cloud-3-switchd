@@ -10,6 +10,7 @@ Usage:
   ./run.sh run [ARGS...]   Build and run with daemon arguments
   ./run.sh build           Build release binary only
   ./run.sh check           Check formatting, Clippy, tests and release build
+  ./run.sh integration     Test restarts/hotplug/timeouts using isolated audio
   ./run.sh fmt             Format Rust sources
   ./run.sh lock            Regenerate Cargo.lock
   ./run.sh clean           Remove Cargo build output
@@ -63,6 +64,13 @@ case "$command" in
 
   fmt)
     nix_develop cargo fmt --all
+    ;;
+
+  integration)
+    test_runtime="$(mktemp -d /tmp/hyperx-integration-XXXXXX)"
+    trap 'rm -rf -- "$test_runtime"' EXIT
+    HYPERX_TEST_RUNTIME="$test_runtime" PULSE_SERVER="unix:$test_runtime/native" \
+      nix_develop cargo test --locked isolated_server_recovery -- --ignored --nocapture
     ;;
 
   lock)

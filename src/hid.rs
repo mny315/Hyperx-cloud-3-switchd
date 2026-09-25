@@ -19,6 +19,7 @@ const CONNECTED_NOTIFICATION_ID: u8 = 12;
 const REPORT_SIZE: usize = 64;
 const RESPONSE_BUFFER_SIZE: usize = 256;
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(1);
+const MAX_STALE_REPORTS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HeadsetState {
@@ -81,8 +82,7 @@ fn open_responding_device() -> Result<(HidDevice, HeadsetState)> {
     let mut failures = Vec::new();
 
     for info in api.device_list().filter(|info| {
-        info.vendor_id() == HYPERX_VENDOR_ID
-            && CLOUD_III_S_PRODUCT_IDS.contains(&info.product_id())
+        info.vendor_id() == HYPERX_VENDOR_ID && CLOUD_III_S_PRODUCT_IDS.contains(&info.product_id())
     }) {
         // hidapi can expose the same hidraw path more than once for different
         // HID collections. Opening it repeatedly only duplicates errors.
@@ -171,8 +171,8 @@ fn query_connected(device: &HidDevice) -> Result<HeadsetState> {
 
 fn drain_pending_reports(device: &HidDevice) -> Result<()> {
     let mut buffer = [0u8; RESPONSE_BUFFER_SIZE];
-
-    loop {
+    // A noisy device must not monopolize the daemon indefinitely.
+    for _ in 0..MAX_STALE_REPORTS {
         let len = device
             .read_timeout(&mut buffer, 0)
             .context("failed while draining stale HID reports")?;
@@ -180,13 +180,11 @@ fn drain_pending_reports(device: &HidDevice) -> Result<()> {
             return Ok(());
         }
     }
+    bail!("HID report queue did not drain after {MAX_STALE_REPORTS} reports")
 }
 
 fn parse_connected_state(response: &[u8]) -> Option<HeadsetState> {
-    if response.len() >= 7
-        && response[0] == RESPONSE_ID
-        && response[5] == CONNECTED_COMMAND_ID
-    {
+    if response.len() >= 7 && response[0] == RESPONSE_ID && response[5] == CONNECTED_COMMAND_ID {
         return match response[6] {
             0 => Some(HeadsetState::Disconnected),
             2 => Some(HeadsetState::Connected),
