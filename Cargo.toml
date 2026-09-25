@@ -1,6 +1,6 @@
 [package]
 name = "hyperx-audio-switchd"
-version = "0.1.1"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
 description = "Switch PipeWire/PulseAudio output based on HyperX Cloud III S Wireless power state"

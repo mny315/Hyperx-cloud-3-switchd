@@ -2,6 +2,8 @@
 
 Small Linux daemon for **HyperX Cloud III S Wireless**.
 
+Stable release: **1.0.0**. Hotfix releases use the **1.0.x** version series.
+
 It automatically switches the default PipeWire/PulseAudio output depending on the headset power state and moves active audio streams to the selected output.
 
 - headset on → HyperX
